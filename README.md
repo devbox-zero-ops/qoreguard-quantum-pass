@@ -30,3 +30,8 @@ npm run dev
 ## License
 
 MIT — see [LICENSE](./LICENSE).
+
+## Verified Testnet Transactions (`qorechain-diana`)
+
+- **ML-DSA-87 Key Registration (`MsgRegisterPQCKeyV2`)**: `9EA9E9F491A478C390F3B50EE71CE1A73B9788BC3FD3455E77D9FCD1DCE0C9E2` (Block `10814705`)
+- **Hybrid-Signed Proof Transaction (`MsgSend`, 1 `uqor`)**: `9BBF4541A77802CF8377F7C24037F1BE439A80DC6807947F434790D93A081326` (Block `10814708`)
