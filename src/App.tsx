@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { createClient, type QoreChainClient } from "@qorechain/sdk";
+import { createClient, qorToEvm, type QoreChainClient } from "@qorechain/sdk";
 
 const REST_URL = import.meta.env.DEV
   ? (import.meta.env.VITE_QORE_REST_URL ?? "/lcd")
@@ -110,26 +110,44 @@ export function App(): JSX.Element {
     }
     setLoading(true);
     try {
-      const [balRes, statusRes, accRes] = await Promise.allSettled([
-        client.rest.getAllBalances(target),
-        client.qor.getPqcKeyStatus(target),
-        client.rest.getPqcAccount(target),
-      ]);
-      if (balRes.status === "fulfilled") {
-        setBalances((balRes.value.balances as Balance[]) ?? []);
+      const evmAddr = target.startsWith("qor1") ? qorToEvm(target) : target;
+      const evmBalPromise = fetch(EVM_RPC_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "eth_getBalance",
+          params: [evmAddr, "latest"],
+        }),
+      }).then((r) => r.json() as Promise<{ result?: string; error?: { message?: string } }>);
+
+      const pqcStatusPromise = client.qor.getPqcKeyStatus(target);
+
+      const [evmBalRes, statusRes] = await Promise.allSettled([evmBalPromise, pqcStatusPromise]);
+
+      if (evmBalRes.status === "fulfilled" && evmBalRes.value?.result) {
+        const wei = BigInt(evmBalRes.value.result);
+        const uqor = wei / 1_000_000_000_000n;
+        setBalances([{ denom: "uqor", amount: uqor.toString() }]);
+      } else if (import.meta.env.DEV) {
+        const restBal = await client.rest.getAllBalances(target);
+        setBalances((restBal.balances as Balance[]) ?? []);
+      } else {
+        setBalances([]);
       }
+
       if (statusRes.status === "fulfilled") {
         setPqcStatus(statusRes.value as Record<string, unknown>);
       }
-      if (accRes.status === "fulfilled") {
-        setPqcAccount(accRes.value as Record<string, unknown>);
-      }
-      if (
-        balRes.status === "rejected" &&
-        statusRes.status === "rejected" &&
-        accRes.status === "rejected"
-      ) {
-        throw new Error(String(balRes.reason));
+
+      if (import.meta.env.DEV) {
+        try {
+          const acc = await client.rest.getPqcAccount(target);
+          setPqcAccount(acc as Record<string, unknown>);
+        } catch {
+          // ignore optional rest lookup
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
